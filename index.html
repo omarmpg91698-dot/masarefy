@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>مصاريفي</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#123F8A">
@@ -65,6 +66,7 @@ section h2 .note{margin:0;font-family:var(--body)}
 .sample{font-size:12.5px;background:var(--accent-soft);color:var(--ink);border-radius:12px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px}
 .sample button{background:none;border:1px solid var(--accent);color:var(--accent);border-radius:999px;padding:4px 12px;font-size:12.5px;white-space:nowrap}
 
+.tap{cursor:pointer}.tap:active{opacity:.6}
 .catrow{display:grid;grid-template-columns:28px 1fr auto;gap:4px 10px;align-items:center;padding-block:7px}
 .catrow .bar{grid-column:2/4;height:7px;background:var(--line);border-radius:4px;overflow:hidden}
 .catrow .bar i{display:block;height:100%;border-radius:4px;background:var(--accent)}
@@ -313,6 +315,39 @@ button.acct:last-child{border-bottom:0}
         <p class="note">اكتب الحد اللي عايز تصرفه في كل بند. البند بيقلب أصفر لما يعدي <bdi dir="ltr">80%</bdi> وأحمر لما يعدي الحد.</p>
       </section>
       <section>
+        <h2>أهداف مالية</h2>
+        <div class="panel" style="display:grid;gap:10px">
+          <div id="goalsList"></div>
+          <input id="gName" placeholder="اسم الهدف (مثلاً: موبايل جديد)" aria-label="اسم الهدف">
+          <input id="gTarget" inputmode="decimal" placeholder="المبلغ المطلوب" aria-label="المبلغ المطلوب" class="num">
+          <button class="btn ghost" id="gAdd" style="width:100%">+ أضف هدف</button>
+        </div>
+      </section>
+      <section>
+        <h2>تقسيم المرتب</h2>
+        <div class="panel" style="display:grid;gap:10px">
+          <input id="salIn" inputmode="decimal" placeholder="مرتبك الشهري" aria-label="المرتب الشهري" class="num">
+          <div id="salOut"></div>
+          <p class="note">التقسيم الافتراضي 50% أساسيات و30% رغبات و20% ادخار. غيّر النسب براحتك، ولازم تجمع 100%.</p>
+        </div>
+      </section>
+      <section>
+        <h2>الزكاة</h2>
+        <div class="panel" style="display:grid;gap:10px">
+          <input id="goldIn" inputmode="decimal" placeholder="سعر جرام الذهب عيار 24 النهارده" aria-label="سعر جرام الذهب" class="num">
+          <div id="zakOut"></div>
+        </div>
+      </section>
+      <section>
+        <h2>تقسيم فاتورة</h2>
+        <div class="panel" style="display:grid;gap:10px">
+          <input id="spBill" placeholder="اسم الفاتورة (مثلاً: إيجار الشقة)" aria-label="اسم الفاتورة">
+          <input id="spAmt" inputmode="decimal" placeholder="المبلغ الكلي" aria-label="المبلغ الكلي" class="num">
+          <input id="spPpl" placeholder="الأسامي مفصولة بفاصلة، مثلاً: عمر، أحمد، محمد" aria-label="الأسامي">
+          <div id="spOut"></div>
+        </div>
+      </section>
+      <section>
         <h2>البنود</h2>
         <div class="panel">
           <div class="seg two" id="catSeg"><button data-t="out" class="on">مصروفات</button><button data-t="in">دخل</button></div>
@@ -408,6 +443,7 @@ button.acct:last-child{border-bottom:0}
             <button class="btn ghost" id="bkCopy">نسخ البيانات</button>
             <button class="btn ghost" id="bkLoad">استرجاع من النص</button>
             <button class="btn ghost" id="bkExcel">نسخ للإكسل</button>
+            <button class="btn ghost" id="bkFile">تنزيل ملف CSV</button>
           </div>
           <p class="err" id="bkErr" hidden></p>
         </div>
@@ -579,7 +615,7 @@ const acctBal=a=>a.opening+S.tx.reduce((s,t)=>s+delta(t,a.id),0);
 const acctName=id=>{const a=S.accounts.find(x=>x.id===id);return a?a.name:"حساب محذوف"};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let txQ="",txF="all",undoT=null,recurEditId=null,fSub=null,cSubs=[];
+let catF=null,txQ="",txF="all",undoT=null,recurEditId=null,fSub=null,cSubs=[];
 /* sub-items (البنود الداخلية): each category can have a list of names; a transaction can pick one */
 function drawSubs(){const c=fType==="tr"?null:catMap[fCat],subs=(c&&c.subs)||[];if(!subs.includes(fSub))fSub=null;
   $("subWrap").hidden=!subs.length;
@@ -657,7 +693,7 @@ function donut(by,total){
   const top=rows[0];
   return `<div class="donutWrap"><svg class="chart" viewBox="0 0 150 150" role="img" aria-label="توزيع المصروفات">${arcs}
     <text x="75" y="70" text-anchor="middle">الإجمالي</text><text class="lbl" x="75" y="90" text-anchor="middle" style="font-size:15px">${compact.format(total)}</text></svg>
-    <ul class="legend">${rows.map(([c,v])=>`<li><i style="background:${cat(c).col}"></i><span>${esc(cat(c).n)}</span><span class="num"><bdi dir="ltr">${Math.round(v/total*100)}%</bdi></span></li>`).join("")}</ul></div>
+    <ul class="legend">${rows.map(([c,v])=>`<li class="tap" data-cat="${c}"><i style="background:${cat(c).col}"></i><span>${esc(cat(c).n)}</span><span class="num"><bdi dir="ltr">${Math.round(v/total*100)}%</bdi></span></li>`).join("")}</ul></div>
     <p class="take">أكبر بند: <b>${esc(cat(top[0]).n)}</b> بـ ${money(top[1])}.</p>`;
 }
 
@@ -732,11 +768,12 @@ function render(){
   const inc=mt.filter(t=>t.type==="in").reduce((s,t)=>s+t.amount,0),out=mt.filter(t=>t.type==="out").reduce((s,t)=>s+t.amount,0);
   $("mIn").textContent=money(inc);$("mOut").textContent=money(out);
   $("sampleNote").hidden=!S.sample;
+  drawTools();
 
   const by={};mt.filter(t=>t.type==="out").forEach(t=>by[t.cat]=(by[t.cat]||0)+t.amount);
   const rows=Object.entries(by).sort((a,b)=>b[1]-a[1]),max=rows.length?rows[0][1]:1;
   $("cats").innerHTML=rows.length?rows.map(([c,v])=>{const m=cat(c);
-    return `<div class="catrow"><span class="dot" style="background:${m.col}">${ic(m.ic)}</span><span>${esc(m.n)} <span class="note num" style="display:inline"><bdi dir="ltr">${Math.round(v/out*100)}%</bdi></span></span><span class="amt num">${fmt(v)}</span><span class="bar"><i style="width:${v/max*100}%;background:${m.col}"></i></span></div>`}).join("")
+    return `<div class="catrow tap" data-cat="${c}"><span class="dot" style="background:${m.col}">${ic(m.ic)}</span><span>${esc(m.n)} <span class="note num" style="display:inline"><bdi dir="ltr">${Math.round(v/out*100)}%</bdi></span></span><span class="amt num">${fmt(v)}</span><span class="bar"><i style="width:${v/max*100}%;background:${m.col}"></i></span></div>`}).join("")
     :`<div class="empty">مفيش مصروفات الشهر ده. دوس + علشان تسجل أول مصروف.</div>`;
 
   $("recent").innerHTML=mt.length?mt.slice(0,5).map(txItem).join(""):`<li class="empty" style="display:block">مفيش عمليات لسه.</li>`;
@@ -744,8 +781,8 @@ function render(){
   let html="",last="";
   const q=txQ.trim().toLowerCase(),searching=!!q||txF!=="all";
   const hit=t=>(txF==="all"||t.type===txF)&&(!q||[t.note,t.sub||"",t.type==="tr"?"تحويل":cat(t.cat).n,acctName(t.acct),t.to?acctName(t.to):"",String(t.amount)].join(" ").toLowerCase().includes(q));
-  const shown=searching?S.tx.filter(hit).sort((a,b)=>b.date.localeCompare(a.date)):selDay?mt.filter(t=>t.date===selDay):mt;
-  $("txHead").textContent=searching?`نتايج البحث (${shown.length.toLocaleString("ar-EG-u-nu-latn")})`:selDay?"عمليات اليوم":"عمليات الشهر";$("txBack").textContent=selDay&&!searching?"كل الشهر":"رجوع";
+  const shown=searching?S.tx.filter(hit).sort((a,b)=>b.date.localeCompare(a.date)):selDay?mt.filter(t=>t.date===selDay):catF?mt.filter(t=>t.type==="out"&&t.cat===catF):mt;
+  $("txHead").textContent=searching?`نتايج البحث (${shown.length.toLocaleString("ar-EG-u-nu-latn")})`:selDay?"عمليات اليوم":catF?`مصروفات ${cat(catF).n} (${shown.length.toLocaleString("ar-EG-u-nu-latn")})`:"عمليات الشهر";$("txBack").textContent=(selDay||catF)&&!searching?"كل الشهر":"رجوع";
   for(const t of shown){if(t.date!==last){last=t.date;html+=(html?"</ul>":"")+`<p class="daylabel">${new Date(t.date+"T12:00").toLocaleDateString("ar-EG-u-nu-latn",{weekday:"long",day:"numeric",month:"long"})}</p><ul class="tx">`}html+=txItem(t)}
   $("allTx").innerHTML=html?html+"</ul>":`<div class="empty">${searching?"مفيش عمليات تطابق البحث.":selDay?"مفيش عمليات في اليوم ده.":"مفيش عمليات في الشهر ده."}</div>`;
 
@@ -772,7 +809,7 @@ function render(){
   renderCatList();
 
   $("accts").innerHTML=S.accounts.map(a=>`<button class="acct" data-aid="${a.id}"><div><b>${esc(a.name)}</b><span class="num">${S.tx.filter(t=>t.acct===a.id||t.to===a.id).length} عملية</span></div><span class="side"><span class="v num">${money(acctBal(a))}</span><span class="chev">‹</span></span></button>`).join("")+`<p class="note" style="margin:8px 0 0">دوس على أي حساب علشان تعدل رصيده أو اسمه.</p>`;
-  $("backup").value=JSON.stringify({accounts:S.accounts,tx:S.tx,budgets:S.budgets,list:S.list,cats:S.cats,debts:S.debts,recur:S.recur});
+  $("backup").value=JSON.stringify({accounts:S.accounts,tx:S.tx,budgets:S.budgets,list:S.list,cats:S.cats,debts:S.debts,recur:S.recur,goals:S.goals||[],salary:S.salary||null,gold:S.gold||0});
   $("debts").innerHTML=debtsHTML();$("recurList").innerHTML=recurHTML();$("rCompare").innerHTML=compareHTML();
   $("pinClear").hidden=!getPin();$("pinSet").textContent=getPin()?"غيّر الرقم":"حفظ الرقم";
 }
@@ -795,7 +832,8 @@ function go(v){document.querySelectorAll(".view").forEach(x=>x.hidden=x.id!=="v-
   const tab=v;
   document.querySelectorAll("nav .tab").forEach(b=>{if(b.dataset.go===tab)b.setAttribute("aria-current","page");else b.removeAttribute("aria-current")});
   window.scrollTo(0,0)}
-document.addEventListener("click",e=>{const g=e.target.closest("[data-go]");if(g)go(g.dataset.go)});
+document.addEventListener("click",e=>{const cr=e.target.closest("[data-cat]");if(cr){catF=cr.dataset.cat;selDay=null;txF="all";txQ="";go("tx");render();return}if(e.target.closest("nav .tab"))catF=null;
+  const g=e.target.closest("[data-go]");if(g)go(g.dataset.go)});
 $("mPrev").onclick=()=>{selDay=null;cur=new Date(cur.getFullYear(),cur.getMonth()-1,1);render()};
 $("mNext").onclick=()=>{selDay=null;cur=new Date(cur.getFullYear(),cur.getMonth()+1,1);render()};
 
@@ -843,7 +881,7 @@ $("calMonths").onclick=e=>{const b=e.target.closest("[data-m]");if(b){calM=+b.da
 $("calDays").onclick=e=>{const b=e.target.closest("[data-d]");if(!b)return;selDay=b.dataset.d;cur=new Date(calY,calM,1);closeSheet();render();go("tx")};
 $("calMonthAll").onclick=()=>{selDay=null;cur=new Date(calY,calM,1);closeSheet();render()};
 $("calToday").onclick=()=>{const n=new Date();selDay=ymd(n);cur=new Date(n.getFullYear(),n.getMonth(),1);closeSheet();render();go("tx")};
-$("txBack").onclick=()=>{if(selDay){selDay=null;render()}else go("home")};
+$("txBack").onclick=()=>{if(catF){catF=null;render()}else if(selDay){selDay=null;render()}else go("home")};
 
 /* account edit */
 let acEdit=null,acDelArmed=false;
@@ -978,8 +1016,55 @@ $("clearSample").onclick=function(){
 $("bkCopy").onclick=()=>{const ta=$("backup"),fb=()=>{ta.focus();ta.select();let ok=false;try{ok=document.execCommand("copy")}catch(e){}toast(ok?"اتنسخت":"اختار النص وانسخه")};
   try{navigator.clipboard.writeText(ta.value).then(()=>toast("اتنسخت"),fb)}catch(e){fb()}};
 $("bkLoad").onclick=()=>{try{const d=JSON.parse($("backup").value);if(!Array.isArray(d.accounts)||!Array.isArray(d.tx))throw 0;
-  S={sample:false,ver:2,accounts:d.accounts,tx:d.tx,budgets:d.budgets||{},list:d.list||[],debts:d.debts||[],recur:d.recur||[],cats:d.cats&&d.cats.out?d.cats:defCats()};buildCats();save();render();$("bkErr").hidden=true;toast("البيانات رجعت")}
+  S={sample:false,ver:2,accounts:d.accounts,tx:d.tx,budgets:d.budgets||{},list:d.list||[],debts:d.debts||[],recur:d.recur||[],cats:d.cats&&d.cats.out?d.cats:defCats(),goals:d.goals||[],salary:d.salary||{amt:0,pcts:[50,30,20]},gold:d.gold||0};buildCats();save();render();$("bkErr").hidden=true;toast("البيانات رجعت")}
   catch(e){$("bkErr").textContent="النص ده مش نسخة احتياطية سليمة. الصق النص كامل زي ما نسخته.";$("bkErr").hidden=false}};
+
+/* tools: goals, salary split, zakat, bill split */
+function ensureTools(){S.goals=S.goals||[];S.salary=S.salary||{amt:0,pcts:[50,30,20]};S.gold=S.gold||0}
+const toolRow=(l,v,extra="")=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)"><span>${l}</span><span class="num">${v}</span>${extra}</div>`;
+function drawGoals(){ensureTools();$("goalsList").innerHTML=S.goals.length?S.goals.map(g=>{const p=g.target?Math.min(g.saved/g.target,1):0;
+  return `<div class="budget"><div class="head"><span class="nm">${esc(g.name)}</span><button class="x" data-gdel="${g.id}" aria-label="امسح ${esc(g.name)}">×</button></div>
+  <div class="bar"><i style="width:${p*100}%;background:var(--accent)"></i></div>
+  <div class="meta num"><span>${money(g.saved)} من ${money(g.target)}</span><span>${p>=1?"وصلت للهدف!":"فاضل "+money(g.target-g.saved)}</span></div>
+  <div style="display:flex;gap:8px;margin-top:6px"><input class="num" id="gp-${g.id}" inputmode="decimal" placeholder="مبلغ جديد" style="flex:1"><button class="btn ghost" data-gput="${g.id}">أضف للهدف</button></div></div>`}).join("")
+  :`<div class="empty">مفيش أهداف لسه. ابدأ بهدف واحد.</div>`}
+function drawSalary(){ensureTools();const a=S.salary.amt||0,names=["أساسيات","رغبات","ادخار"];
+  $("salOut").innerHTML=!a?`<div class="empty">اكتب مرتبك عشان نقسمه.</div>`:
+  S.salary.pcts.map((p,i)=>toolRow(names[i],money(a*p/100),`<span><input class="num" data-pct="${i}" inputmode="numeric" value="${p}" style="width:58px"> %</span>`)).join("")+
+  (S.salary.pcts.reduce((x,y)=>x+y,0)!==100?`<p class="err">النسب لازم تجمع 100%</p>`:"")}
+function drawZakat(){ensureTools();const tot=S.accounts.reduce((x,a)=>x+acctBal(a),0),nis=85*S.gold;
+  $("zakOut").innerHTML=!S.gold?`<div class="empty">اكتب سعر الجرام عشان نحسب النصاب.</div>`:
+  toolRow("النصاب (85 جرام ذهب عيار 24)",money(nis))+toolRow("رصيدك في كل الحسابات",money(tot))+
+  (tot>=nis?`<p class="take">الزكاة المتوقعة (2.5%): <b>${money(tot*0.025)}</b></p>`:`<p class="take">رصيدك أقل من النصاب، فمفيش زكاة.</p>`)+
+  `<p class="note">تقريبي. الزكاة بتتحسب على الفلوس اللي فضلت عندك سنة قمرية كاملة، ومعيار النصاب ممكن يختلف حسب الجهة اللي بتسأل.</p>`}
+function drawSplit(){const amt=parseFloat($("spAmt").value)||0,names=$("spPpl").value.split(/[,،]/).map(x=>x.trim()).filter(Boolean),bill=$("spBill").value.trim()||"الفاتورة";
+  $("spOut").innerHTML=!(amt>0)||!names.length?`<div class="empty">اكتب المبلغ والأسامي عشان نقسم.</div>`:
+  `<p class="note">${esc(bill)}: ${money(amt)} على ${names.length} ${names.length===1?"شخص":"أشخاص"}</p>`+
+  names.map(n=>toolRow(esc(n),money(amt/names.length))).join("")}
+function drawTools(){ensureTools();drawGoals();drawSalary();drawZakat();drawSplit();
+  const g=$("goldIn"),sa=$("salIn");if(document.activeElement!==g)g.value=S.gold||"";if(document.activeElement!==sa)sa.value=S.salary.amt||""}
+$("gAdd").onclick=()=>{const n=$("gName").value.trim(),t=parseFloat($("gTarget").value);
+  if(!n||!(t>0)){toast("اكتب اسم الهدف ومبلغه");return}ensureTools();S.goals.push({id:uid(),name:n,target:t,saved:0});
+  $("gName").value="";$("gTarget").value="";save();drawGoals();toast("الهدف اتضاف")};
+$("goalsList").onclick=e=>{ensureTools();const d=e.target.closest("[data-gdel]"),p=e.target.closest("[data-gput]");
+  if(d){S.goals=S.goals.filter(g=>g.id!==d.dataset.gdel);save();drawGoals();return}
+  if(p){const g=S.goals.find(x=>x.id===p.dataset.gput),v=parseFloat($("gp-"+g.id).value);if(!(v>0)){toast("اكتب مبلغ");return}
+    g.saved+=v;save();drawGoals();if(g.saved>=g.target)toast("مبروك! وصلت للهدف")}};
+$("salIn").oninput=e=>{ensureTools();S.salary.amt=parseFloat(e.target.value)||0;save();drawSalary()};
+$("salOut").onchange=e=>{const i=e.target.dataset.pct;if(i===undefined)return;ensureTools();
+  S.salary.pcts[+i]=parseFloat(e.target.value)||0;save();drawSalary()};
+$("goldIn").oninput=e=>{ensureTools();S.gold=parseFloat(e.target.value)||0;save();drawZakat()};
+["spAmt","spPpl","spBill"].forEach(id=>$(id).oninput=drawSplit);
+
+/* CSV file: same columns the importer reads, so an export can be imported again */
+function csvFile(){const q=v=>{const x=String(v??"");return /[",\n\r]/.test(x)?'"'+x.replace(/"/g,'""')+'"':x};
+  const tn={in:"income",out:"expense",tr:"transfer"};
+  const head=["Date","Time","Type","Category","Amount","Wallet","To wallet","Merchant","Note"];
+  const rows=[...S.tx].sort((a,b)=>a.date.localeCompare(b.date)).map(t=>[t.date,"",tn[t.type],t.type==="tr"?"":cat(t.cat).n,t.amount,acctName(t.acct),t.to?acctName(t.to):"","",t.note||""]);
+  return "\ufeff"+[head,...rows].map(r=>r.map(q).join(",")).join("\r\n")}
+$("bkFile").onclick=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csvFile()],{type:"text/csv;charset=utf-8"}));
+  a.download="masarefy-"+new Date().toISOString().slice(0,10)+".csv";document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)};
 
 /* search & filter */
 $("txQ").oninput=e=>{txQ=e.target.value;render()};
