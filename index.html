@@ -484,6 +484,10 @@ button.acct:last-child{border-bottom:0}
         <label class="f">التاريخ<input type="date" id="fDate"></label>
         <label class="f">ملاحظة<input id="fNote" placeholder="اختياري"></label>
       </div>
+      <div id="invBox" style="display:grid;gap:6px">
+        <div id="invPrev" hidden style="text-align:center"><img id="invImg" alt="صورة الفاتورة" style="max-width:100%;max-height:260px;border-radius:12px;display:block;margin:0 auto 8px"><button type="button" class="btn ghost" id="invDel">امسح صورة الفاتورة</button></div>
+        <label id="invPick" class="btn ghost" style="display:block;text-align:center;cursor:pointer">📷 صوّر الفاتورة أو اختار صورة<input type="file" id="invFile" accept="image/*" hidden></label>
+      </div>
       <label class="chk2" id="repWrap"><input type="checkbox" id="fRep"> كرّرها كل شهر في نفس اليوم</label>
       <p class="err" id="fErr" hidden></p>
       <div class="row">
@@ -605,7 +609,7 @@ let S;
 try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){S=null}
 if(!S||!Array.isArray(S.accounts)||(S.sample&&S.ver!==2))S=sample();
 S.list=S.list||[];S.budgets=S.budgets||{};S.debts=S.debts||[];S.recur=S.recur||[];if(!S.cats||!S.cats.out)S.cats=defCats();buildCats();
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}const u=document.getElementById("undo");if(u)u.hidden=true};
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast("المساحة في الموبايل خلصت. امسح صور فواتير قديمة، أو خد نسخة احتياطية")}const u=document.getElementById("undo");if(u)u.hidden=true};
 
 let cur=new Date();cur=new Date(cur.getFullYear(),cur.getMonth(),1);
 const mk=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}`;
@@ -679,7 +683,7 @@ function txItem(t){
   const c=cat(t.cat);
   const sub=[acctName(t.acct),t.note].filter(Boolean).join(" · ");
   return `<li data-id="${t.id}"><span class="dot" style="background:${c.col}">${ic(c.ic)}</span>
-  <span class="t"><b>${esc(c.n)}${t.sub?" · "+esc(t.sub):""}</b><span>${esc(sub)}</span></span>
+  <span class="t"><b>${esc(c.n)}${t.sub?" · "+esc(t.sub):""}${t.inv?" 🧾":""}</b><span>${esc(sub)}</span></span>
   <span class="v num ${t.type}">${t.type==="in"?"+":"−"}${fmt(t.amount)}</span></li>`;
 }
 
@@ -855,7 +859,7 @@ function openSheet(t,preset){
   fCat=b.cat||null;fSub=b.sub||null;setType(b.type||"out");
   $("fAmt").value=b.amount||"";$("fDate").value=b.date||ymd(new Date());$("fNote").value=b.note||"";
   $("fDel").hidden=!t;$("fDel").textContent="حذف";$("fErr").hidden=true;
-  $("fRep").checked=false;$("repWrap").hidden=!!t;
+  $("fRep").checked=false;$("repWrap").hidden=!!t;invData=b.inv||null;drawInv();
   recurEditId=(preset&&preset.recurId)||null;if(recurEditId){$("shTitle").textContent="تعديل العملية المتكررة";$("repWrap").hidden=true}
   $("scrim").hidden=$("sheet").hidden=false;setTimeout(()=>{if(!t)$("fAmt").focus()},50);
 }
@@ -908,11 +912,24 @@ $("fSubs").onclick=e=>{const b=e.target.closest("[data-sub]");if(!b)return;fSub=
 document.addEventListener("click",e=>{const li=e.target.closest("ul.tx li[data-id]");if(li){const t=S.tx.find(x=>x.id===li.dataset.id);if(t)openSheet(t)}});
 const toNum=s=>parseFloat(String(s).replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d)).replace(/[,٬]/g,"").replace("٫","."));
 const showErr=m=>{$("fErr").textContent=m;$("fErr").hidden=false};
+/* invoice photos: shrink to a small JPEG so it fits in the phone's storage */
+let invData=null;
+function drawInv(){$("invPrev").hidden=!invData;$("invPick").hidden=!!invData;if(invData)$("invImg").src=invData}
+function shrinkImg(file){return new Promise((res,rej)=>{const img=new Image(),u=URL.createObjectURL(file);
+  img.onload=()=>{const k=Math.min(1,1000/Math.max(img.width,img.height)),c=document.createElement("canvas");
+    c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+    URL.revokeObjectURL(u);res(c.toDataURL("image/jpeg",0.72))};
+  img.onerror=()=>{URL.revokeObjectURL(u);rej(new Error("مقدرتش أفتح الصورة، جرب صورة تانية"))};img.src=u})}
+$("invFile").onchange=async e=>{const f=e.target.files[0];if(!f)return;
+  try{invData=await shrinkImg(f);drawInv()}catch(err){toast(err.message)}finally{e.target.value=""}};
+$("invDel").onclick=()=>{invData=null;drawInv()};
+
 $("fSave").onclick=()=>{
   const amt=toNum($("fAmt").value);
   if(!(amt>0))return showErr("اكتب مبلغ أكبر من صفر.");
   if(!$("fDate").value)return showErr("اختار التاريخ.");
   const rec={id:editId||uid(),type:fType,amount:amt,acct:$("fAcct").value,date:$("fDate").value,note:$("fNote").value.trim()};
+  if(invData)rec.inv=invData;
   if(fType==="tr"){
     if(S.accounts.length<2)return showErr("محتاج حسابين على الأقل علشان تحوّل. ضيف حساب من صفحة الحسابات.");
     if($("fTo").value===rec.acct)return showErr("اختار حساب تاني تحوّل له.");

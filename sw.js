@@ -1,4 +1,4 @@
-const CACHE = "masarefy-v6";
+const CACHE = "masarefy-v7";
 const FILES = [
   "./index.html",
   "./manifest.json",
